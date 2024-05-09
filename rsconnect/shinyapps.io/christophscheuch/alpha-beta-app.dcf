@@ -1,0 +1,12 @@
+name: alpha-beta-app
+title: alpha-beta-app
+username: christophscheuch
+account: christophscheuch
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 11971581
+bundleId: 8597517
+url: https://christophscheuch.shinyapps.io/alpha-beta-app/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
