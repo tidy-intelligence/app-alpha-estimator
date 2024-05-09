@@ -8,7 +8,6 @@ library(highcharter)
 library(broom)
 
 # TODO: style summary table more nicely
-# TODO: run regression every 30 days, not daily for better performance
 # TODO: migrate to rhino and affiliated packages
 
 # Helper functions --------------------------------------------------------
@@ -49,18 +48,21 @@ estimate_capm <- function(data) {
 }
 
 roll_capm_estimation <- function(data, days) {
-  data |>  
-    arrange(date) |> 
-    mutate(
-      estimation = slider::slide_period(
-        .x = pick(everything()),
-        .i = date,
-        .period = "day",
-        .f = estimate_capm,
-        .before = days - 1,
-        .complete = TRUE
-      )) |> 
-    tidyr::unnest(estimation)
+  
+  dates <- seq(min(data$date), max(data$date), by = 30)
+  
+  res <- list()
+  for (j in 1:length(dates)) {
+    data_sub <- data |> 
+      filter(date <= dates[j] & date >= dates[j]-days)
+    
+    if (nrow(data_sub) >= 100) {
+      res[[j]] <- estimate_capm(data_sub) |> 
+        mutate(date = dates[j])
+    }
+  }
+  bind_rows(res)
+
 }
 
 create_summary <- function(data) {
