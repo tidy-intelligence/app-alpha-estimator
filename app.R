@@ -73,9 +73,9 @@ create_summary <- function(data) {
   paste(c(
     paste0("Number of observations: ", nrow(data), "<br/>"),
     paste0("Overall beta: ", round(capm$coefficients[2], 2), " ",
-          "(t-statistic: ", round(capm$coefficients[6], 2), ")<br/>"),
+           "(t-statistic: ", round(capm$coefficients[6], 2), ")<br/>"),
     paste0("Overall alpha (annualized): ", round((annualize_value(capm$coefficients[1]))*100, 2), "% ",
-          "(t-statistic: ", round(capm$coefficients[5], 2), ")<br/>"),
+           "(t-statistic: ", round(capm$coefficients[5], 2), ")<br/>"),
     paste0("Overall Adjusted R2: ", round(capm$adj.r.squared, 2))
   ), collapse = "")
 }
@@ -97,13 +97,9 @@ create_heat_map <- function(data) {
     data_sub <- data |> 
       filter(date <= dates_df$end_date[j] & date >= dates_df$start_date[j])
     
-    min_obs <- round(days / 365 * 252 * 0.8, 0)
-    
-    if (nrow(data_sub) >= min_obs) {
-      res[[j]] <- estimate_capm(data_sub) |> 
-        mutate(start_date = dates_df$start_date[j],
-               end_date = dates_df$end_date[j])
-    }
+    res[[j]] <- estimate_capm(data_sub) |> 
+      mutate(start_date = dates_df$start_date[j],
+             end_date = dates_df$end_date[j])
   }
   res <- bind_rows(res)
   
@@ -172,7 +168,9 @@ ui <- fluidPage(
   fluidRow(
     box(
       width = 12,
-      uiOutput("summaryPanel")
+      shinycssloaders::withSpinner(
+        uiOutput("summaryPanel")
+      )
     )
   ),
   
@@ -180,7 +178,9 @@ ui <- fluidPage(
   fluidRow(
     box(
       width = 12,
-      highchartOutput("betasPlot")
+      shinycssloaders::withSpinner(
+        highchartOutput("betasPlot")
+      )
     )
   ),
   
@@ -188,7 +188,9 @@ ui <- fluidPage(
   fluidRow(
     box(
       width = 12,
-      highchartOutput("alphasPlot"), 
+      shinycssloaders::withSpinner(
+        highchartOutput("alphasPlot")
+      )
     )
   ),
   
@@ -196,9 +198,11 @@ ui <- fluidPage(
   fluidRow(
     box(
       width = 12,
-      highchartOutput("heatMap"), 
+      shinycssloaders::withSpinner(
+        highchartOutput("heatMap")
+      )
     )
-  ),
+  )
 )
 
 # input <- list("asset" = "^NDX", "benchmark" = "^GSPC", "years" = 6)
@@ -330,7 +334,7 @@ server <- function(input, output) {
                     align = "left") |>
         hc_legend(enabled = TRUE) |> 
         hc_tooltip(pointFormat = '<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f}%</b><br/>')
-
+      
     }
   })
   
