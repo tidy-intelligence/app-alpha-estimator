@@ -5,8 +5,9 @@ account: christophscheuch
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 11971581
-bundleId: 8598018
+bundleId: 8598025
 url: https://christophscheuch.shinyapps.io/alpha-beta-app/
 version: 1
 asMultiple: FALSE
 asStatic: FALSE
+ignoredFiles: .Rprofile|renv.lock

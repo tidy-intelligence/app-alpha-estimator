@@ -56,13 +56,14 @@ roll_capm_estimation <- function(data, days) {
     data_sub <- data |> 
       filter(date <= dates[j] & date >= dates[j]-days)
     
-    if (nrow(data_sub) >= 100) {
+    min_obs <- round(days / 365 * 252 * 0.8, 0)
+    
+    if (nrow(data_sub) >= min_obs) {
       res[[j]] <- estimate_capm(data_sub) |> 
         mutate(date = dates[j])
     }
   }
   bind_rows(res)
-
 }
 
 create_summary <- function(data) {
@@ -81,6 +82,52 @@ create_summary <- function(data) {
 
 annualize_value <- function(x) {
   (1 + x)^252 -1
+}
+
+create_heat_map <- function(data) {
+  max_date <- max(data$date)
+  min_date <- min(data$date)
+  years_available <- floor(as.integer(max_date - min_date) / 365)
+  dates_vec <- max_date - seq(1, years_available, by = 1) * 365
+  dates_df <- crossing(start_date = dates_vec, end_date = dates_vec) |> 
+    filter(end_date > start_date)
+  
+  res <- list()
+  for (j in 1:nrow(dates_df)) {
+    data_sub <- data |> 
+      filter(date <= dates_df$end_date[j] & date >= dates_df$start_date[j])
+    
+    min_obs <- round(days / 365 * 252 * 0.8, 0)
+    
+    if (nrow(data_sub) >= min_obs) {
+      res[[j]] <- estimate_capm(data_sub) |> 
+        mutate(start_date = dates_df$start_date[j],
+               end_date = dates_df$end_date[j])
+    }
+  }
+  res <- bind_rows(res)
+  
+  res |> 
+    filter(term == "(Intercept)") |> 
+    mutate(
+      estimate = if_else(abs(statistic) >= 1.96, estimate, NA),
+      estimate = annualize_value(estimate) * 100) |> 
+    hchart(
+      "heatmap", 
+      hcaes(
+        x = start_date,
+        y = end_date, 
+        value = estimate
+      )
+    ) |> 
+    hc_xAxis(title = list(text = "Start date"), type = "datetime") |>
+    hc_yAxis(title = list(text = "End date"), type = "datetime") |>
+    hc_title(text = paste0("Annunalized alpha estimates for different start and end dates"), 
+             align = "left") |>
+    hc_subtitle(text = "Filled areas indicate statistical significance at the 95% level",
+                align = "left") |>
+    hc_legend(enabled = TRUE) |> 
+    hc_tooltip(pointFormat = 'Annualized alpha: <b>{point.value:.2f}%</b><br/>')
 }
 
 # User interface ----------------------------------------------------------
@@ -121,6 +168,14 @@ ui <- fluidPage(
     )
   ),
   
+  # Summary panel
+  fluidRow(
+    box(
+      width = 12,
+      uiOutput("summaryPanel")
+    )
+  ),
+  
   # Betas
   fluidRow(
     box(
@@ -137,13 +192,13 @@ ui <- fluidPage(
     )
   ),
   
-  # Summary panel
+  # Heat map
   fluidRow(
     box(
       width = 12,
-      uiOutput("summaryPanel")
+      highchartOutput("heatMap"), 
     )
-  )
+  ),
 )
 
 # input <- list("asset" = "^NDX", "benchmark" = "^GSPC", "years" = 6)
@@ -164,7 +219,7 @@ server <- function(input, output) {
         mutate(return_asset = price_asset / lag(price_asset) - 1,
                return_benchmark = price_benchmark / lag(price_benchmark) - 1)
       
-      estimation <- roll_capm_estimation(data, days = input$years*252)
+      estimation <- roll_capm_estimation(data, days = input$years*365)
       
       alphas <- estimation |> 
         filter(term == "(Intercept)") |> 
@@ -284,6 +339,10 @@ server <- function(input, output) {
       "<h3>Estimates based on full period</h2>",
       create_summary(processed_data()$data)
     )
+  })
+  
+  output$heatMap <- renderHighchart({
+    create_heat_map(processed_data()$data)
   })
 }
 
