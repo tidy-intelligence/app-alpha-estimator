@@ -10,7 +10,6 @@ library(gt)
 
 # TODO: remove broom dependency
 # TODO: migrate to rhino and affiliated packages
-# TODO: show full date range for rolling estimations
 
 # Helper functions --------------------------------------------------------
 get_adjusted_close <- function(symbol) {
@@ -188,7 +187,7 @@ ui <- fluidPage(
   ),
   
   # App title
-  titlePanel("Compute asset-specific alphas and betas for any benchmark"),
+  titlePanel("Compute asset-specific CAPM alphas and betas for any benchmark"),
   
   # Input panel
   fluidRow(
@@ -296,12 +295,19 @@ server <- function(input, output) {
   
   output$betasPlot <- renderHighchart({
     betas <- processed_data()$betas
+    data <- processed_data()$data
     if (!is.null(betas)) {
+      dates <- data |> 
+        distinct(date)
+      
       betas_significant <- betas |>
-        mutate(estimate = if_else(!is_significant, NA, estimate))
+        mutate(estimate = if_else(!is_significant, NA, estimate)) |> 
+        right_join(dates, join_by(date)) |> 
+        mutate(is_significant = replace_na(is_significant, TRUE))
       
       betas_not_significant <- betas |>
-        mutate(estimate = if_else(is_significant, NA, estimate))
+        mutate(estimate = if_else(is_significant, NA, estimate)) |> 
+        mutate(is_significant = replace_na(is_significant, FALSE))
       
       highchart() |>
         hc_add_series(data = betas_significant, type = "line", 
@@ -326,12 +332,21 @@ server <- function(input, output) {
   
   output$alphasPlot <- renderHighchart({
     alphas <- processed_data()$alphas
+    data <- processed_data()$data
+    
     if (!is.null(alphas)) {
+      dates <- data |> 
+        distinct(date)
+      
       alphas_significant <- alphas |>
-        mutate(estimate = if_else(!is_significant, NA, estimate) * 100)
+        mutate(estimate = if_else(!is_significant, NA, estimate) * 100) |> 
+        right_join(dates, join_by(date)) |> 
+        mutate(is_significant = replace_na(is_significant, TRUE))
       
       alphas_not_significant <- alphas |>
-        mutate(estimate = if_else(is_significant, NA, estimate) * 100)
+        mutate(estimate = if_else(is_significant, NA, estimate) * 100) |> 
+        right_join(dates, join_by(date)) |> 
+        mutate(is_significant = replace_na(is_significant, FALSE))
       
       highchart()|>
         hc_add_series(data = alphas_significant, type = "line", 
