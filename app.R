@@ -6,14 +6,16 @@ library(dplyr)
 library(tidyr)
 library(highcharter)
 library(broom)
+library(gt)
 
-# TODO: style summary table more nicely
+# TODO: remove broom dependency
 # TODO: migrate to rhino and affiliated packages
+# TODO: show full date range for rolling estimations
 
 # Helper functions --------------------------------------------------------
 get_adjusted_close <- function(symbol) {
   
-  start_timestamp <- as.integer(as.POSIXct(as.Date("2000-01-01"), tz = "UTC"))
+  start_timestamp <- as.integer(as.POSIXct(as.Date("1990-01-01"), tz = "UTC"))
   end_timestamp <- as.integer(as.POSIXct(Sys.Date(), tz = "UTC"))
   
   url <-  paste0(
@@ -70,14 +72,27 @@ create_summary <- function(data) {
   
   capm <- summary(lm("return_asset ~ return_benchmark", data))
   
-  paste(c(
-    paste0("Number of observations: ", nrow(data), "<br/>"),
-    paste0("Overall beta: ", round(capm$coefficients[2], 2), " ",
-           "(t-statistic: ", round(capm$coefficients[6], 2), ")<br/>"),
-    paste0("Overall alpha (annualized): ", round((annualize_value(capm$coefficients[1]))*100, 2), "% ",
-           "(t-statistic: ", round(capm$coefficients[5], 2), ")<br/>"),
-    paste0("Overall Adjusted R2: ", round(capm$adj.r.squared, 2))
-  ), collapse = "")
+  res <- tibble(
+    Metric = c("Number of observations", "Beta (t-stat)", "Annualized alpha (t-stat)", "Adjusted R2"),
+    Value = c(nrow(data), 
+              paste0(round(capm$coefficients[2], 2), " (", round(capm$coefficients[6], 2), ")"), 
+              paste0(round((annualize_value(capm$coefficients[1])), 2), " (",round(capm$coefficients[5], 2), ")"),
+              round(capm$adj.r.squared, 2)),
+  )
+  
+  res |> 
+    gt() |> 
+    tab_header(
+      title = "CAPM model based on full sample",
+      subtitle = "Note: t-statistics above 1.96 indicate statistical significance at the 95% level"
+    ) |>
+    opt_align_table_header(align = "left") |> 
+    opt_interactive(
+      use_pagination = FALSE,
+      use_pagination_info = FALSE,
+      use_sorting = FALSE,
+      use_highlight = TRUE
+    )
 }
 
 annualize_value <- function(x) {
@@ -126,6 +141,40 @@ create_heat_map <- function(data) {
     hc_tooltip(pointFormat = 'Annualized alpha: <b>{point.value:.2f}%</b><br/>')
 }
 
+load_processed_data <- function(input) {
+  asset_data <- get_adjusted_close(input$asset)
+  benchmark_data <- get_adjusted_close(input$benchmark)
+  
+  data <- asset_data |> 
+    rename(price_asset = adjusted_close) |> 
+    inner_join(benchmark_data |> 
+                 rename(price_benchmark = adjusted_close), join_by(date)) |> 
+    arrange(date) |> 
+    mutate(return_asset = price_asset / lag(price_asset) - 1,
+           return_benchmark = price_benchmark / lag(price_benchmark) - 1)
+  
+  estimation <- roll_capm_estimation(data, days = input$years*365)
+  
+  alphas <- estimation |> 
+    filter(term == "(Intercept)") |> 
+    na.omit() |> 
+    select(date, estimate, statistic) |> 
+    mutate(is_significant = abs(statistic) >= 1.96,
+           estimate = annualize_value(estimate)) 
+  
+  betas <- estimation |> 
+    filter(term == "return_benchmark") |> 
+    select(date, estimate, statistic) |> 
+    mutate(is_significant = abs(statistic) >= 1.96) |> 
+    na.omit()
+  
+  list(
+    "data" = data,
+    "alphas" = alphas,
+    "betas" = betas
+  )
+}
+
 # User interface ----------------------------------------------------------
 ui <- fluidPage(
   
@@ -146,9 +195,9 @@ ui <- fluidPage(
     box(
       width = 12,
       p("Go to",  tags$a(href = "https://finance.yahoo.com", target = "_blank", "Yahoo Finance"), " and look up symbols. ",
-        "The defaul ARKK refers to the ARK Innovation ETF, while URTH denotes the popular iShares MSCI World ETF"),
-      textInput("asset", "Enter asset symbol", value = "ARKK"),
-      textInput("benchmark", "Enter benchmark symbol", value = "URTH"),
+        "The defaul BRK-B refers to the Berkshire Hathaway Class-B shares, while ^GSPC denotes the S&P 500 index"),
+      textInput("asset", "Enter asset symbol", value = "BRK-B"),
+      textInput("benchmark", "Enter benchmark symbol", value = "^GSPC"),
       numericInput("years", "Lookback for rolling estimation (in years):", 5, min = 1, max = 30, step = 1),
       actionButton("button", "Compute Alpha & Beta") 
     )
@@ -169,7 +218,7 @@ ui <- fluidPage(
     box(
       width = 12,
       shinycssloaders::withSpinner(
-        uiOutput("summaryPanel")
+        gt_output("summaryTable")
       )
     )
   ),
@@ -205,46 +254,14 @@ ui <- fluidPage(
   )
 )
 
-# input <- list("asset" = "^NDX", "benchmark" = "^GSPC", "years" = 6)
+# input <- list("asset" = "BRK-B", "benchmark" = "^GSPC", "years" = 6)
 
 # Server ------------------------------------------------------------------
 server <- function(input, output) {
   processed_data <- eventReactive(input$button, {
-    
-    if (nzchar(input$asset)) {
-      asset_data <- get_adjusted_close(input$asset)
-      benchmark_data <- get_adjusted_close(input$benchmark)
-      
-      data <- asset_data |> 
-        rename(price_asset = adjusted_close) |> 
-        inner_join(benchmark_data |> 
-                     rename(price_benchmark = adjusted_close), join_by(date)) |> 
-        arrange(date) |> 
-        mutate(return_asset = price_asset / lag(price_asset) - 1,
-               return_benchmark = price_benchmark / lag(price_benchmark) - 1)
-      
-      estimation <- roll_capm_estimation(data, days = input$years*365)
-      
-      alphas <- estimation |> 
-        filter(term == "(Intercept)") |> 
-        na.omit() |> 
-        select(date, estimate, statistic) |> 
-        mutate(is_significant = abs(statistic) >= 1.96,
-               estimate = annualize_value(estimate)) 
-      
-      betas <- estimation |> 
-        filter(term == "return_benchmark") |> 
-        select(date, estimate, statistic) |> 
-        mutate(is_significant = abs(statistic) >= 1.96) |> 
-        na.omit()
-      
-      list(
-        "data" = data,
-        "alphas" = alphas,
-        "betas" = betas
-      )
+    if (nzchar(input$asset) & nzchar(input$benchmark) & is.integer(input$years)) {
+      load_processed_data(input)
     }
-    
   })
   
   output$assetPlot <- renderHighchart({
@@ -338,11 +355,8 @@ server <- function(input, output) {
     }
   })
   
-  output$summaryPanel <- renderUI({
-    HTML(
-      "<h3>Estimates based on full period</h2>",
-      create_summary(processed_data()$data)
-    )
+  output$summaryTable <- render_gt({
+    create_summary(processed_data()$data)
   })
   
   output$heatMap <- renderHighchart({
