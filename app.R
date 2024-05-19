@@ -10,6 +10,8 @@ library(gt)
 
 # TODO: remove broom dependency
 # TODO: migrate to rhino and affiliated packages
+# TODO: align fonts and font sizes
+# TODO: add start and end date to heat map tooltip
 
 # Helper functions --------------------------------------------------------
 get_adjusted_close <- function(symbol) {
@@ -156,10 +158,10 @@ load_processed_data <- function(input) {
   
   alphas <- estimation |> 
     filter(term == "(Intercept)") |> 
-    na.omit() |> 
     select(date, estimate, statistic) |> 
     mutate(is_significant = abs(statistic) >= 1.96,
-           estimate = annualize_value(estimate)) 
+           estimate = annualize_value(estimate)) |> 
+    na.omit()
   
   betas <- estimation |> 
     filter(term == "return_benchmark") |> 
@@ -253,7 +255,7 @@ ui <- fluidPage(
   )
 )
 
-# input <- list("asset" = "BRK-B", "benchmark" = "^GSPC", "years" = 6)
+# input <- list("asset" = "BRK-B", "benchmark" = "^GSPC", "years" = 5)
 
 # Server ------------------------------------------------------------------
 server <- function(input, output) {
@@ -365,8 +367,7 @@ server <- function(input, output) {
         hc_subtitle(text = "Solid line indicates statistical significance at the 95% level", 
                     align = "left") |>
         hc_legend(enabled = TRUE) |> 
-        hc_tooltip(pointFormat = '<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f}%</b><br/>')
-      
+        hc_tooltip(pointFormat = '<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f}</b><br/>')
     }
   })
   
