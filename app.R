@@ -38,14 +38,49 @@ ui <- fluidPage(
   ),
   
   # App title
-  titlePanel("Compute asset-specific CAPM alphas & betas for selected benchmarks"),
+  titlePanel("Compute asset-specific CAPM alphas & betas for selected markets"),
+  
+  # Explanation panel
+  # Explanation panel
+  fluidRow(
+    withMathJax(),
+    box(
+      width = 12,
+      title = "The CAPM in a nutshell",
+      p(HTML("The <b>Capital Asset Pricing Model</b> (CAPM) is a fundamental tool in finance that helps investors understand the <b>relationship between risk</b> and <b>expected return</b>. It links risk and return through this formula:")),
+      p("$$\\mathbb{E}[R_i] = R_f + \\beta_i \\times (R_m - R_f),$$"),
+      p("where"),
+      tags$ul(
+        tags$li("\\(\\mathbb{E}[R_i]\\) is the expected return of asset \\(i\\)"),
+        tags$li("\\(R_f\\) is the risk-free rate (e.g., government bonds)"),
+        tags$li("\\(\\beta_i\\) is the volatility of asset \\(i\\) relative to the market"),
+        tags$li("\\(R_m - R_f\\) is the market risk premium")
+      ),
+      p("This model suggests that riskier assets (higher \\(\\beta_i\\)) should offer higher returns. It's simple and widely used but relies on assumptions like efficient markets and rational investors, which may not fully reflect reality."),
+      p(HTML("<b>Alpha</b> \\(\\alpha_i\\) is a measure of an investment’s performance relative to the expected return predicted by the CAPM. While the CAPM estimates the expected return based on an asset’s risk (\\(\\beta_i\\) ), \\(\\alpha_i\\)  tells you if the asset outperformed or underperformed that expectation.")),
+      p("$$\\alpha_i = R_i - \\left(R_f + \\beta_i \\times (R_m - R_f)\\right),$$"),
+      p("where"),
+      tags$ul(
+        tags$li("\\(R_i\\) is the return of asset \\(i\\).")
+      ),
+      p(
+        "For more details, you can visit the ",
+        a("Wikipedia article on CAPM", href = "https://en.wikipedia.org/wiki/Capital_asset_pricing_model", target = "_blank"),
+        "."
+      )
+    )
+  ),
   
   # Input panel
   fluidRow(
     box(
       width = 12,
-      selectizeInput("asset", "Select asset", selected = NULL, choices = NULL, multiple = FALSE),
-      selectizeInput("benchmark", "Select benchmark", selected = NULL, choices = NULL, multiple = FALSE),
+      title = "Choose your parameters",
+      p("You can pick an asset and a market that you want to compare it to. In the context of the CAPM, the market refers to the broad portfolio of all investable assets."),
+      p("In practice, market indexes are used as proxy for the overall market. The choice of the index depends on the context and the assets you’re analyzing."),
+      p("For instace, for US stocks, the S&P 500 might be a good proxy for the market, while for German stocks the DAX is more suitable. Feel free to play around with different markets."),
+      selectizeInput("asset", "Select an asset", selected = NULL, choices = NULL, multiple = FALSE),
+      selectizeInput("benchmark", "Select a market", selected = NULL, choices = NULL, multiple = FALSE),
       numericInput("years", "Lookback for rolling estimation (in years):", 5, min = 1, max = 30, step = 1),
       actionButton("button", "Update figures & tables") 
     )
@@ -291,7 +326,7 @@ server <- function(input, output, session) {
     create_heat_map(processed_data()$data)
   })
   
-  delay(1000, click("button"))
+  # delay(1000, click("button"))
   
 }
 
