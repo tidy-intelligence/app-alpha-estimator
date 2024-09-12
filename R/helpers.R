@@ -124,7 +124,6 @@ create_asset_plot <- function(data, input) {
                   name = input$benchmark, color = "#d86502", dashStyle = "Solid") |> 
     hc_xAxis(title = list(text = ""), type = "datetime") |>
     hc_yAxis(title = list(text = "")) |>
-    hc_title(align = "left") |>
     hc_legend(enabled = TRUE, layout = "horizontal", align = "center", verticalAlign = "bottom") |> 
     hc_tooltip(
       headerFormat = '<span style="font-size: 10px">{point.x:%b %e, %Y}</span><br/>',
@@ -156,8 +155,6 @@ create_betas_plot <- function(data, beta, input) {
                   name = "Not significant", dashStyle = "Dot") |>
     hc_xAxis(title = list(text = ""), type = "datetime") |>
     hc_yAxis(title = list(text = "")) |>
-    hc_title(text = paste0("Beta estimates based on ", input$years, "-year rolling regressions"), 
-             align = "left") |>
     hc_subtitle(text = "Solid line indicates statistical significance at the 95% level",
                 align = "left") |>
     hc_legend(enabled = TRUE) |> 
