@@ -1,12 +1,12 @@
-name: alpha-beta-app
-title: alpha-beta-app
+name: app-alpha-estimator
+title: app-alpha-estimator
 username: christophscheuch
 account: christophscheuch
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
-appId: 11971581
-bundleId: 8603802
-url: https://christophscheuch.shinyapps.io/alpha-beta-app/
+appId: 12651048
+bundleId: 9080197
+url: https://christophscheuch.shinyapps.io/app-alpha-estimator/
 version: 1
 asMultiple: FALSE
 asStatic: FALSE

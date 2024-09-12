@@ -4,16 +4,13 @@ library(shinycssloaders)
 library(shinyjs)
 library(tidyfinance)
 library(dplyr)
+library(dbplyr)
 library(tidyr)
 library(highcharter)
 library(broom)
 library(gt)
 library(DBI)
 library(duckdb)
-
-# TODO: format start date and end date in heat map tooltip
-# TODO: format CAPM table results more nicely
-# TODO: add more explanations & interpretations
 
 # Load data -----------------------------------------------------------------------------------
 
@@ -41,7 +38,6 @@ ui <- fluidPage(
   titlePanel("Compute asset-specific CAPM alphas & betas for selected markets"),
   
   # Explanation panel
-  # Explanation panel
   fluidRow(
     withMathJax(),
     box(
@@ -58,11 +54,8 @@ ui <- fluidPage(
       ),
       p("This model suggests that riskier assets (higher \\(\\beta_i\\)) should offer higher returns. It's simple and widely used but relies on assumptions like efficient markets and rational investors, which may not fully reflect reality."),
       p(HTML("<b>Alpha</b> \\(\\alpha_i\\) is a measure of an investment’s performance relative to the expected return predicted by the CAPM. While the CAPM estimates the expected return based on an asset’s risk (\\(\\beta_i\\) ), \\(\\alpha_i\\)  tells you if the asset outperformed or underperformed that expectation.")),
-      p("$$\\alpha_i = R_i - \\left(R_f + \\beta_i \\times (R_m - R_f)\\right),$$"),
-      p("where"),
-      tags$ul(
-        tags$li("\\(R_i\\) is the return of asset \\(i\\).")
-      ),
+      p("$$\\alpha_i = R_i - \\mathbb{E}[R_i] = R_i - \\left(R_f + \\beta_i \\times (R_m - R_f)\\right),$$"),
+      p("where \\(R_i\\) is the return of asset \\(i\\)."),
       p(
         "For more details, you can visit the ",
         a("Wikipedia article on CAPM", href = "https://en.wikipedia.org/wiki/Capital_asset_pricing_model", target = "_blank"),
@@ -77,11 +70,9 @@ ui <- fluidPage(
       width = 12,
       title = "Choose your parameters",
       p("You can pick an asset and a market that you want to compare it to. In the context of the CAPM, the market refers to the broad portfolio of all investable assets."),
-      p("In practice, market indexes are used as proxy for the overall market. The choice of the index depends on the context and the assets you’re analyzing."),
-      p("For instace, for US stocks, the S&P 500 might be a good proxy for the market, while for German stocks the DAX is more suitable. Feel free to play around with different markets."),
+      p("In practice, market indexes are used as proxy for the overall market. The choice of the index depends on the context and the assets you’re analyzing. For instace, for US stocks, the S&P 500 might be a good proxy for the market, while for German stocks the DAX is more suitable. Feel free to play around with different markets."),
       selectizeInput("asset", "Select an asset", selected = NULL, choices = NULL, multiple = FALSE),
       selectizeInput("benchmark", "Select a market", selected = NULL, choices = NULL, multiple = FALSE),
-      numericInput("years", "Lookback for rolling estimation (in years):", 5, min = 1, max = 30, step = 1),
       actionButton("button", "Update figures & tables") 
     )
   ),
@@ -90,6 +81,8 @@ ui <- fluidPage(
   fluidRow(
     box(
       width = 12,
+      title = textOutput("assetPlotTitle"),
+      p("The first figure shows the data that enters the CAPM estimation. To make both prices comparable, they are normalized to 100 at the beginning of the period."),
       div(class = "scrollable-box",
           shinycssloaders::withSpinner(
             highchartOutput("assetPlot"),
@@ -103,6 +96,8 @@ ui <- fluidPage(
   fluidRow(
     box(
       width = 12,
+      title = "CAPM model based on full sample",
+      p("This table shows the results of a CAPM regression using the full available data from the figure above."),
       div(class = "scrollable-box",
           shinycssloaders::withSpinner(
             gt_output("summaryTable"),
@@ -116,6 +111,8 @@ ui <- fluidPage(
   fluidRow(
     box(
       width = 12,
+      title = textOutput("betasPlotTitle"),
+      p("Instead of using the full sample, we can use just a subsample of data. This figure shows the estimated asset betas for rolling regressions: each time period, we run a CAPM regression using the last 5 of data as an input. The resulting time series of betas gives us an idea about whether the asset's comovement with the market is stable or varies over time."),
       div(class = "scrollable-box",
           shinycssloaders::withSpinner(
             highchartOutput("betasPlot"),
@@ -129,6 +126,8 @@ ui <- fluidPage(
   fluidRow(
     box(
       width = 12,
+      title = textOutput("alphasPlotTitle"),
+      p("The next figure shows the estimated asset alphas for rolling regressions: each time period, we run a CAPM regression using the last 5 of data as an input. The resulting time series of alphas gives us an idea about whether the asset continuously out- or underperforms the market."),
       div(class = "scrollable-box",
           shinycssloaders::withSpinner(
             highchartOutput("alphasPlot"),
@@ -142,6 +141,8 @@ ui <- fluidPage(
   fluidRow(
     box(
       width = 12,
+      title = "Annunalized alpha estimates for different start and end dates",
+      p("Lastly, we investigate whether the asset has out- or underperformed the market in specific time periods. We thus run regressions for different start and end date combinations. The heat map below shows the resulting asset alphas if they are statistically significant."),
       div(class = "scrollable-box",
           shinycssloaders::withSpinner(
             highchartOutput("heatMap"),
@@ -152,7 +153,7 @@ ui <- fluidPage(
   )
 )
 
-# input <- list("asset" = "BRK-B", "benchmark" = "^GSPC", "years" = 5)
+# input <- list("asset" = "BRK-B", "benchmark" = "^GSPC")
 
 # Server ------------------------------------------------------------------
 server <- function(input, output, session) {
@@ -200,133 +201,44 @@ server <- function(input, output, session) {
   )
   
   processed_data <- eventReactive(input$button, {
-    if (nzchar(input$asset) & nzchar(input$benchmark) & is.integer(input$years)) {
+    if (nzchar(input$asset) & nzchar(input$benchmark)) {
       load_processed_data(input)
     }
   })
   
   output$assetPlot <- renderHighchart({
-    req(processed_data())
-    isolate({
-      data <- processed_data()$data
-      if (!is.null(data)) {
-        data <- data |>
-          pivot_longer(cols = contains("price")) |>
-          mutate(name = if_else(name == "price_asset", input$asset, input$benchmark)) |>
-          group_by(name) |>
-          mutate(value = value / first(value) * 100) |>
-          ungroup()
-        
-        data_asset <- filter(data, name == input$asset)
-        data_benchmark <- filter(data, name == input$benchmark)
-        
-        highchart() |>
-          hc_add_series(data = data_asset, type = "line", 
-                        hcaes(x = date, y = value),
-                        name = input$asset, color = "#0275D8", dashStyle = "Solid") |> 
-          hc_add_series(data = data_benchmark, type = "line",
-                        hcaes(x = date, y = value),
-                        name = input$benchmark, color = "#d86502", dashStyle = "Solid") |> 
-          hc_xAxis(title = list(text = ""), type = "datetime") |>
-          hc_yAxis(title = list(text = "")) |>
-          hc_title(text = paste("Adjusted close prices for", input$asset, "and", input$benchmark, "normalized to 100 at the beginning"),
-                   align = "left") |>
-          hc_legend(enabled = TRUE, layout = "horizontal", align = "center", verticalAlign = "bottom") |> 
-          hc_tooltip(
-            headerFormat = '<span style="font-size: 10px">{point.x:%b %e, %Y}</span><br/>',
-            pointFormat = '<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.0f}</b><br/>'
-          )
-      } 
-    })
+    create_asset_plot(processed_data()$data, input)
+  })
+  
+  output$assetPlotTitle <- renderText({
+    paste("Adjusted close prices for", input$asset, "and", input$benchmark, "normalized to 100 at the beginning")
   })
   
   output$betasPlot <- renderHighchart({
-    betas <- processed_data()$betas
-    data <- processed_data()$data
-    if (!is.null(betas)) {
-      dates <- data |> 
-        distinct(date)
-      
-      betas_significant <- betas |>
-        mutate(estimate = if_else(!is_significant, NA, estimate)) |> 
-        right_join(dates, join_by(date)) |> 
-        mutate(is_significant = replace_na(is_significant, TRUE))
-      
-      betas_not_significant <- betas |>
-        mutate(estimate = if_else(is_significant, NA, estimate)) |> 
-        mutate(is_significant = replace_na(is_significant, FALSE))
-      
-      highchart() |>
-        hc_add_series(data = betas_significant, type = "line", 
-                      hcaes(x = date, y = estimate), 
-                      color = "#0275D8",
-                      name = "Significant", dashStyle = "Solid") |>
-        hc_add_series(data = betas_not_significant, type = "line", 
-                      hcaes(x = date, y = estimate),
-                      color = "#d86502",
-                      name = "Not significant", dashStyle = "Dot") |>
-        hc_xAxis(title = list(text = ""), type = "datetime") |>
-        hc_yAxis(title = list(text = "")) |>
-        hc_title(text = paste0("Beta estimates based on ", input$years, "-year rolling regressions"), 
-                 align = "left") |>
-        hc_subtitle(text = "Solid line indicates statistical significance at the 95% level",
-                    align = "left") |>
-        hc_legend(enabled = TRUE) |> 
-        hc_tooltip(xDateFormat = '%b %e, %Y',
-                   pointFormat = '<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f}</b><br/>')
-      
-    }
+    create_betas_plot(processed_data()$data, processed_data()$betas, input)
+  })
+  
+  output$betasPlotTitle <- renderText({
+    paste0("Beta estimates based on 5-year rolling regressions")
   })
   
   output$alphasPlot <- renderHighchart({
-    alphas <- processed_data()$alphas
-    data <- processed_data()$data
-    
-    if (!is.null(alphas)) {
-      dates <- data |> 
-        distinct(date)
-      
-      alphas_significant <- alphas |>
-        mutate(estimate = if_else(!is_significant, NA, estimate) * 100) |> 
-        right_join(dates, join_by(date)) |> 
-        mutate(is_significant = replace_na(is_significant, TRUE))
-      
-      alphas_not_significant <- alphas |>
-        mutate(estimate = if_else(is_significant, NA, estimate) * 100) |> 
-        right_join(dates, join_by(date)) |> 
-        mutate(is_significant = replace_na(is_significant, FALSE))
-      
-      highchart()|>
-        hc_add_series(data = alphas_significant, type = "line", 
-                      hcaes(x = date, y = estimate), 
-                      color = "#0275D8",
-                      name = "Significant", dashStyle = "Solid") |>
-        hc_add_series(data = alphas_not_significant, type = "line", 
-                      hcaes(x = date, y = estimate), 
-                      color = "#d86502",
-                      name = "Not significant", dashStyle = "Dot") |>
-        hc_xAxis(title = list(text = ""), type = "datetime") |>
-        hc_yAxis(title = list(text = ""),
-                 labels = list(format = "{value}%")) |>
-        hc_title(text = paste0("Annualized alpha estimates based on ", input$years, "-year rolling regressions"), 
-                 align = "left") |>
-        hc_subtitle(text = "Solid line indicates statistical significance at the 95% level", 
-                    align = "left") |>
-        hc_legend(enabled = TRUE) |> 
-        hc_tooltip(xDateFormat = '%b %e, %Y',
-                   pointFormat = '<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f}</b><br/>')
-    }
+    create_alphas_plot(processed_data()$data, processed_data()$alphas, input)
+  })
+  
+  output$alphasPlotTitle <- renderText({
+    paste0("Alpha estimates based on 5-year rolling regressions")
   })
   
   output$summaryTable <- render_gt({
-    create_summary(processed_data()$data)
+    create_summary(processed_data()$data, input)
   })
   
   output$heatMap <- renderHighchart({
-    create_heat_map(processed_data()$data)
+    create_heat_map(processed_data()$data, input)
   })
   
-  # delay(1000, click("button"))
+  delay(1000, click("button"))
   
 }
 
