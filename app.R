@@ -35,7 +35,7 @@ ui <- fluidPage(
   ),
   
   # App title
-  titlePanel("Compute asset-specific CAPM alphas & betas for selected markets"),
+  titlePanel("Estimate asset-specific CAPM alphas & betas for selected markets"),
   
   # Explanation panel
   fluidRow(
