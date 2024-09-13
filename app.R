@@ -3,6 +3,7 @@ library(shinydashboard)
 library(shinycssloaders)
 library(shinyjs)
 library(tidyfinance)
+library(httr2)
 library(dplyr)
 library(dbplyr)
 library(tidyr)
@@ -11,6 +12,10 @@ library(broom)
 library(gt)
 library(DBI)
 library(duckdb)
+
+# Load helpers --------------------------------------------------------------------------------
+
+source("R/helpers.R")
 
 # Load data -----------------------------------------------------------------------------------
 

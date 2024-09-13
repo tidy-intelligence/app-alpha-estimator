@@ -131,7 +131,7 @@ create_asset_plot <- function(data, input) {
     )
 }
 
-create_betas_plot <- function(data, beta, input) {
+create_betas_plot <- function(data, betas, input) {
   dates <- data |> 
     distinct(date)
   
@@ -244,7 +244,7 @@ create_heat_map <- function(data, input) {
     ) |> 
     hc_xAxis(title = list(text = "Start date"), categories = unique(res$start_date)) |>
     hc_yAxis(title = list(text = "End date"), categories = unique(res$end_date)) |>
-    hc_subtitle(text = "Filled areas indicate statistical significance at the 95% level",
+    hc_subtitle(text = "Colored areas indicate statistical significance at the 95% level",
                 align = "left") |>
     hc_legend(enabled = TRUE) |> 
     hc_tooltip(
