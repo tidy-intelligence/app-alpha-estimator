@@ -1,4 +1,4 @@
-This shiny app estimates stock-specific CAPM alphas and betas for your favorit stocks from selected market indexes. 
+This shiny app estimates stock-specific CAPM alphas and betas for your favorite stocks from selected market indexes. 
 
 This app is a prototype based on the book [Tidy Finance with R](https://www.tidy-finance.org/) and a submission for the [2024 Shiny Contest](https://posit.co/blog/announcing-the-2024-shiny-contest/) by Posit.
 
