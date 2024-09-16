@@ -36,7 +36,7 @@ create_summary <- function(data, input) {
   capm <- summary(lm("return_asset ~ return_benchmark", data))
   
   res <- tibble(
-    Metric = c("$\\alpha$ (annualized)", "$\\beta$", "Number of observations", "Adjusted $R^2$"),
+    Metric = c("Alpha (annualized)", "Beta", "Number of observations", "Adjusted R-squared"),
     Value = c(paste0(round((annualize_value(capm$coefficients[1])), 2), get_significance_star(capm$coefficients[5]), "<br>(", round(capm$coefficients[5], 2), ")"), 
               paste0(round(capm$coefficients[2], 2), get_significance_star(capm$coefficients[6]), "<br>(", round(capm$coefficients[6], 2), ")"),
               format(nrow(data), big.mark = ","),  
@@ -48,7 +48,6 @@ create_summary <- function(data, input) {
     tab_footnote(
       "Note: * indicates a statistical significance at the 95% level (t-statistics in parentheses)"
     ) |>
-    fmt_markdown() |> 
     cols_align(align = "center", columns = "Value") |> 
     opt_align_table_header(align = "left") |> 
     opt_interactive(

@@ -661,6 +661,16 @@
       ],
       "Hash": "3bcd11943da509341838da9399e18bce"
     },
+    "katex": {
+      "Package": "katex",
+      "Version": "1.4.1",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "V8"
+      ],
+      "Hash": "5705835b03d2678cbfa51e9845bd4032"
+    },
     "knitr": {
       "Package": "knitr",
       "Version": "1.48",
